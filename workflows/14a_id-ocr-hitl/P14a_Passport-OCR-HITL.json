@@ -1,0 +1,636 @@
+{
+  "name": "L267 — OCR паспорта + проверка человека (HITL)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Урок 267 — OCR + HITL (ОТДЕЛЬНОЕ УПРАЖНЕНИЕ)\nНЕ входит в deliverable Проекта 14. Кейс: Wohnwert Immobilien GmbH — распознавание паспорта клиента для договора аренды, с обязательной проверкой человеком.\n\nТест: отправить боту `Test_Passport_Scan_SPECIMEN.png` как фото.\nВ тестовом режиме reviewer = тот же чат, что и клиент (см. reviewer_chat_id).\n\n⚠️ Каркас: подключить креды (Telegram, OpenAI vision, Google Sheets), подставить Document ID таблицы. Типы/версии нод при импорте могут потребовать мелких правок.\n\n❗Тестировать только на SPECIMEN, не на реальных паспортах ([PII]).",
+        "height": 320,
+        "width": 460,
+        "color": 7
+      },
+      "id": "note_head",
+      "name": "LEGEND",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "tg_trigger",
+      "name": "Telegram Trigger (Client)1",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -820,
+        120
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.message.photo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "leftValue": "={{ !!$json.message.document }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "has_scan",
+      "name": "Has Scan?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -580,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "Пожалуйста, пришлите скан или фото паспорта одним файлом — я не вижу изображения в сообщении.\n\n— 🤖 Вы общаетесь с автоматическим AI-ассистентом Wohnwert Immobilien GmbH (не с живым сотрудником). Персональные данные обрабатываются в соответствии с GDPR.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ask_resend",
+      "name": "Ask to Resend1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -360,
+        320
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo ? $json.message.photo[$json.message.photo.length - 1].file_id : $json.message.document.file_id }}"
+      },
+      "id": "get_file",
+      "name": "Get Passport File1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -360,
+        80
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "### Ветки от Get Passport File1 (порядок важен)\nGenerate Request ID1 стоит ПЕРВОЙ — считает reviewer_chat_id до того, как к нему обратятся Send Scan / Request Verification.\n\n🔀 ПЕРЕКЛЮЧЕНИЕ ТЕСТ→РЕАЛЬНЫЙ СОТРУДНИК: одна точка — поле reviewer_chat_id в Generate Request ID1.\n• тест (сейчас): = chat клиента (reviewer = клиент);\n• реальный: заменить выражение на numeric chat id сотрудника, напр. 123456789.\nSend Scan to Reviewer1 и Request Verification читают reviewer_chat_id — больше нигде менять не нужно.",
+        "height": 200,
+        "width": 360,
+        "color": 4
+      },
+      "id": "note_par",
+      "name": "note Parallel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Generate Request ID1').item.json.reviewer_chat_id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "Скан клиента. Сейчас придёт форма с распознанными данными — сверьте её с этим изображением.\n\n— 🤖 Сообщение сформировано автоматическим AI-ассистентом. Персональные данные — по GDPR.",
+          "appendAttribution": false
+        }
+      },
+      "id": "send_reviewer",
+      "name": "Send Scan to Reviewer1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -120,
+        20
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "request_id",
+              "type": "string",
+              "value": "=REQ-{{ $now.toMillis() }}"
+            },
+            {
+              "id": "a2",
+              "name": "client_chat_id",
+              "type": "string",
+              "value": "={{ $('Telegram Trigger (Client)1').item.json.message.chat.id }}"
+            },
+            {
+              "id": "a3",
+              "name": "client_name",
+              "type": "string",
+              "value": "={{ $('Telegram Trigger (Client)1').item.json.message.from.first_name }} {{ $('Telegram Trigger (Client)1').item.json.message.from.last_name }}"
+            },
+            {
+              "id": "a4",
+              "name": "submitted_at",
+              "type": "string",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm') }}"
+            },
+            {
+              "id": "a5",
+              "name": "reviewer_chat_id",
+              "type": "string",
+              "value": "={{ $('Telegram Trigger (Client)1').item.json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gen_reqid",
+      "name": "Generate Request ID1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Распознай данные с приложенного изображения паспорта и верни строго по схеме: surname, given_names, date_of_birth, nationality, passport_number, date_of_issue, date_of_expiry, confidence. Нечитаемые или отсутствующие поля — пустая строка \"\". Ничего не выдумывай.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — модуль распознавания паспортных данных для оформления договора аренды (агентство Wohnwert Immobilien GmbH). Правила: (1) извлекай значения ТОЛЬКО с предоставленного изображения, переписывай ровно как в документе, без перевода и домысла; (2) если поле нечитаемо или отсутствует — верни пустую строку \"\" и НЕ выдумывай; (3) даты — в формате DD.MM.YYYY как в документе; (4) confidence — общий уровень уверенности по читаемости скана: high | mid | low; (5) без комментариев, только структурированный вывод по схеме. Ты готовишь ЧЕРНОВИК — финальное решение принимает человек."
+        }
+      },
+      "id": "ocr_agent",
+      "name": "OCR Passport (Vision)1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        140,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "vision_model",
+      "name": "Vision Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        300
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"surname\": \"MUSTERMANN\",\n  \"given_names\": \"MAX TEST\",\n  \"date_of_birth\": \"14.05.1988\",\n  \"nationality\": \"MUSTERLAND\",\n  \"passport_number\": \"T00TEST014\",\n  \"date_of_issue\": \"02.03.2022\",\n  \"date_of_expiry\": \"01.03.2032\",\n  \"confidence\": \"high\"\n}"
+      },
+      "id": "parser",
+      "name": "Structured Output Parser1",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge",
+      "name": "Merge OCR + Metadata",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        460,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Save Draft — 8 колонок\nOCR-поля: `{{ $json.output.* }}` · служебные: `{{ $json.* }}` (после Merge Combine All). «Уверенность OCR» пишется только здесь и потом НЕ перезаписывается.",
+        "height": 150,
+        "width": 340,
+        "color": 6
+      },
+      "id": "note_sheet",
+      "name": "note Sheet",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        660,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Лист1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request ID": "={{ $json.request_id }}",
+            "Chat ID клиента": "={{ $json.client_chat_id }}",
+            "Фамилия (OCR)": "={{ $json.output.surname }}",
+            "Имя (OCR)": "={{ $json.output.given_names }}",
+            "Дата рождения (OCR)": "={{ $json.output.date_of_birth }}",
+            "Номер паспорта (OCR)": "={{ $json.output.passport_number }}",
+            "Гражданство (OCR)": "={{ $json.output.nationality }}",
+            "Уверенность OCR": "={{ $json.output.confidence }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save_draft",
+      "name": "Save Draft to Sheet1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        140
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "### Send and Wait — Custom Form (суть HITL)\nЧеловек видит скан (пришёл выше) + форму с ПРЕДЗАПОЛНЕННЫМИ полями из черновика. Значения по умолчанию — из Merge (`$('Merge OCR + Metadata').item.json.output.*`).\n❗Ответ формы приходит вложенным в `$json.data`.",
+        "height": 170,
+        "width": 360,
+        "color": 3
+      },
+      "id": "note_form",
+      "name": "note Form",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Generate Request ID1').item.json.reviewer_chat_id }}",
+        "message": "Сверьте распознанные данные со сканом, отправленным выше. Исправьте поля при необходимости и отправьте форму.\n\n— 🤖 Данные распознаны автоматическим AI-ассистентом и требуют проверки человеком. Обработка персональных данных — по GDPR.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Фамилия",
+              "fieldType": "text",
+              "defaultValue": "={{ $('Merge OCR + Metadata').item.json.output.surname }}"
+            },
+            {
+              "fieldLabel": "Имя",
+              "fieldType": "text",
+              "defaultValue": "={{ $('Merge OCR + Metadata').item.json.output.given_names }}"
+            },
+            {
+              "fieldLabel": "Дата рождения",
+              "fieldType": "text",
+              "defaultValue": "={{ $('Merge OCR + Metadata').item.json.output.date_of_birth }}"
+            },
+            {
+              "fieldLabel": "Номер паспорта",
+              "fieldType": "text",
+              "defaultValue": "={{ $('Merge OCR + Metadata').item.json.output.passport_number }}"
+            },
+            {
+              "fieldLabel": "Гражданство",
+              "fieldType": "text",
+              "defaultValue": "={{ $('Merge OCR + Metadata').item.json.output.nationality }}"
+            },
+            {
+              "fieldLabel": "Всё верно, без исправлений",
+              "fieldType": "checkbox"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "request_verif",
+      "name": "Request Verification (Send and Wait)1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        140
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "was_corrected",
+              "type": "boolean",
+              "value": "={{ !$json.data['Всё верно, без исправлений'] }}"
+            },
+            {
+              "id": "m2",
+              "name": "reviewer_name",
+              "type": "string",
+              "value": "={{ $json.approvedBy ? $json.approvedBy.name : 'не определён' }}"
+            },
+            {
+              "id": "m3",
+              "name": "verified_at",
+              "type": "string",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mark_meta",
+      "name": "Mark Verification Meta1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Лист1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "Request ID"
+          ],
+          "value": {
+            "Request ID": "={{ $('Generate Request ID1').item.json.request_id }}",
+            "Фамилия (OCR)": "={{ $('Request Verification (Send and Wait)1').item.json.data['Фамилия'] }}",
+            "Имя (OCR)": "={{ $('Request Verification (Send and Wait)1').item.json.data['Имя'] }}",
+            "Дата рождения (OCR)": "={{ $('Request Verification (Send and Wait)1').item.json.data['Дата рождения'] }}",
+            "Номер паспорта (OCR)": "={{ $('Request Verification (Send and Wait)1').item.json.data['Номер паспорта'] }}",
+            "Гражданство (OCR)": "={{ $('Request Verification (Send and Wait)1').item.json.data['Гражданство'] }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update_row",
+      "name": "Update Verified Row1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        140
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Generate Request ID1').item.json.client_chat_id }}",
+        "text": "Спасибо! Данные проверены и подтверждены. Готовим договор аренды.\n\n— 🤖 Вы общались с автоматическим AI-ассистентом Wohnwert Immobilien GmbH. Персональные данные обрабатываются в соответствии с GDPR.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "notify_client",
+      "name": "Notify Client1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        140
+      ],
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Telegram Trigger (Client)1": {
+      "main": [
+        [
+          {
+            "node": "Has Scan?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Scan?1": {
+      "main": [
+        [
+          {
+            "node": "Get Passport File1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask to Resend1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Passport File1": {
+      "main": [
+        [
+          {
+            "node": "Generate Request ID1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Scan to Reviewer1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OCR Passport (Vision)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "OCR Passport (Vision)1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "OCR Passport (Vision)1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Passport (Vision)1": {
+      "main": [
+        [
+          {
+            "node": "Merge OCR + Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Request ID1": {
+      "main": [
+        [
+          {
+            "node": "Merge OCR + Metadata",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge OCR + Metadata": {
+      "main": [
+        [
+          {
+            "node": "Save Draft to Sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft to Sheet1": {
+      "main": [
+        [
+          {
+            "node": "Request Verification (Send and Wait)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Verification (Send and Wait)1": {
+      "main": [
+        [
+          {
+            "node": "Mark Verification Meta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Verification Meta1": {
+      "main": [
+        [
+          {
+            "node": "Update Verified Row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Verified Row1": {
+      "main": [
+        [
+          {
+            "node": "Notify Client1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "staticData": null,
+  "active": false
+}

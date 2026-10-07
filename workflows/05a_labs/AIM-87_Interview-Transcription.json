@@ -1,0 +1,805 @@
+{
+  "name": "AIM 87 — Interview Transcription and AI Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## AIM 87 — Interview Transcription and AI Analysis\n\n**Поток данных:**\nФорма → [параллельно] Google Drive + Deepgram → Merge → Sheets (транскрипт) → AI Agent → Sheets (анализ)\n\n**Что нужно заменить перед запуском:**\n1. `REPLACE_WITH_SPREADSHEET_ID` — ID вашего Google Sheets (из URL)\n2. `REPLACE_WITH_FOLDER_ID` — ID папки Google Drive для аудиофайлов\n3. `REPLACE_WITH_DEEPGRAM_API_KEY` — ваш ключ из deepgram.com\n4. Подключить credentials: Google Drive, Google Sheets, OpenAI\n\n**Листы Google Sheets (создать заранее):**\n- Лист 1: Транскрибация интервью\n- Лист 2: Анализ интервью\n- Лист 3: Dead Letter Queue\n\n**Модель:** gpt-4o-mini (можно заменить на gpt-4o)\n**Транскрибация:** Deepgram nova-3, language=multi",
+        "height": 400,
+        "width": 480,
+        "color": 5
+      },
+      "id": "bd923c9f-02b6-4b8a-bdf1-c7b0cd5169c3",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "formTitle": "Загрузка интервью кандидата",
+        "formDescription": "Загрузите MP3-файл интервью, укажите ФИО кандидата и позицию.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "candidate_name",
+              "placeholder": "Иван Петров",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "position",
+              "placeholder": "Python Developer",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "interview_file",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".mp3,audio/mpeg",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6cefed98-cc58-4c05-a852-5ca5601f60a4",
+      "name": "On Form Submission - интервью",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        64,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "interview_file",
+        "name": "={{ $json.candidate_name + ' - ' + $json.position + ' - ' + $now.format('yyyy-MM-dd_HH-mm') + '.mp3' }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_FOLDER_ID",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "98692072-ea6f-4435-bf0b-2f4bc16bc9a2",
+      "name": "Загрузка файла",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        320,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-valid-url",
+              "name": "valid_url",
+              "value": "={{ 'https://drive.google.com/file/d/' + $json.id + '/view' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-candidate",
+              "name": "candidate_name",
+              "value": "={{ $('On Form Submission - интервью').item.json.candidate_name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-position",
+              "name": "position",
+              "value": "={{ $('On Form Submission - интервью').item.json.position }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-date",
+              "name": "submittedAt",
+              "value": "={{ $('On Form Submission - интервью').item.json.submittedAt }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "05efde56-1dcb-4737-8841-9c303b880748",
+      "name": "Создание ссылки на файл",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        560,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepgram.com/v1/listen?language=multi&model=nova-3",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token REPLACE_WITH_DEEPGRAM_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "interview_file",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "1fd66511-d6c9-4faf-855b-364200f20b1e",
+      "name": "Deepgram - транскрибация",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "options": {}
+      },
+      "id": "ee3404c8-da36-4a83-acc1-a353bef9126e",
+      "name": "Merge - объединение веток",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        800,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Транскрибация интервью",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Кандидат": "={{ $json.candidate_name }}",
+            "Позиция": "={{ $json.position }}",
+            "Дата": "={{ $json.submittedAt }}",
+            "Ссылка": "={{ $json.valid_url }}",
+            "Текст": "={{ $('Deepgram - транскрибация').item.json.results.channels[0].alternatives[0].transcript }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Кандидат",
+              "displayName": "Кандидат",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Позиция",
+              "displayName": "Позиция",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Дата",
+              "displayName": "Дата",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Ссылка",
+              "displayName": "Ссылка",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Текст",
+              "displayName": "Текст",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5293d08c-29c2-4872-a5bd-59e9a67e885b",
+      "name": "Запись транскрипта в Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1040,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Deepgram - транскрибация').item.json.results.channels[0].alternatives[0].transcript }}",
+        "options": {
+          "systemMessage": "Ты — опытный HR-аналитик. Твоя задача — проанализировать транскрипт интервью с кандидатом и вернуть структурированный анализ в формате JSON.\n\nВакансия: {{ $('On Form Submission - интервью').item.json.position }}\nКандидат: {{ $('On Form Submission - интервью').item.json.candidate_name }}\n\nПроанализируй транскрипт и верни СТРОГО следующий JSON без какого-либо текста до или после него:\n\n{\n  \"profile_summary\": \"краткое описание профиля кандидата в 2-3 предложениях\",\n  \"experience_overview\": \"описание опыта работы: предыдущие роли, компании, достижения\",\n  \"competencies\": \"ключевые компетенции и навыки кандидата\",\n  \"role_fit\": \"оценка соответствия кандидата данной роли\",\n  \"strengths\": [\"сила 1\", \"сила 2\", \"сила 3\"],\n  \"weaknesses\": [\"слабость 1\", \"слабость 2\"],\n  \"scoring\": {\n    \"hard_skills\": {\"score\": 0, \"comment\": \"обоснование оценки\"},\n    \"soft_skills\": {\"score\": 0, \"comment\": \"обоснование оценки\"},\n    \"motivation\": {\"score\": 0, \"comment\": \"обоснование оценки\"},\n    \"role_match\": {\"score\": 0, \"comment\": \"обоснование оценки\"},\n    \"communication\": {\"score\": 0, \"comment\": \"обоснование оценки\"}\n  },\n  \"overall_score\": 0,\n  \"recommendation\": \"пригласить на следующий этап / отклонить / рассмотреть дополнительно\",\n  \"recommendation_reasoning\": \"подробное обоснование рекомендации\",\n  \"data_gaps\": \"если каких-то данных не хватило для полного анализа — указать что именно. Если данных достаточно — написать: данных достаточно для анализа\"\n}\n\nПРАВИЛА ОЦЕНКИ:\n- Все оценки score по шкале от 1 до 10, где 1 — минимум, 10 — максимум.\n- overall_score — среднее арифметическое пяти оценок, округлённое до одного знака после запятой.\n- Если в транскрипте нет данных по критерию — ставь score = 0, в comment пиши: нет данных в транскрипте.\n- Анализируй только то, что реально сказано в интервью. Не додумывай факты.\n- Все текстовые поля на русском языке.\n- Возвращай только JSON, без markdown-блоков и без текста до/после JSON."
+        }
+      },
+      "id": "9a20a2cf-91d8-4f84-a5a4-7be102383502",
+      "name": "AI Agent - анализ интервью",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1280,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "01b8e3af-46a7-4cc7-b062-15596f1bbd1c",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        720
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "34bc14cf-e71b-450a-b09d-375001d03cfd",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "dfa1c8ee-ca49-48c3-a7f9-cd5ed2ddb6f5",
+      "name": "Auto-fixing Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "25f68f14-4c58-46de-bfed-fd4f3492b216",
+      "name": "OpenAI Chat Model (для авто-исправления)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Анализ интервью",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Кандидат": "={{ $('On Form Submission - интервью').item.json.candidate_name }}",
+            "Позиция": "={{ $('On Form Submission - интервью').item.json.position }}",
+            "Дата": "={{ $('On Form Submission - интервью').item.json.submittedAt }}",
+            "profile_summary": "={{ $json.output.profile_summary }}",
+            "experience_overview": "={{ $json.output.experience_overview }}",
+            "competencies": "={{ $json.output.competencies }}",
+            "role_fit": "={{ $json.output.role_fit }}",
+            "strengths": "={{ $json.output.strengths.join(', ') }}",
+            "weaknesses": "={{ $json.output.weaknesses.join(', ') }}",
+            "hard_skills_score": "={{ $json.output.scoring.hard_skills.score }}",
+            "hard_skills_comment": "={{ $json.output.scoring.hard_skills.comment }}",
+            "soft_skills_score": "={{ $json.output.scoring.soft_skills.score }}",
+            "soft_skills_comment": "={{ $json.output.scoring.soft_skills.comment }}",
+            "motivation_score": "={{ $json.output.scoring.motivation.score }}",
+            "motivation_comment": "={{ $json.output.scoring.motivation.comment }}",
+            "role_match_score": "={{ $json.output.scoring.role_match.score }}",
+            "role_match_comment": "={{ $json.output.scoring.role_match.comment }}",
+            "communication_score": "={{ $json.output.scoring.communication.score }}",
+            "communication_comment": "={{ $json.output.scoring.communication.comment }}",
+            "overall_score": "={{ $json.output.overall_score }}",
+            "recommendation": "={{ $json.output.recommendation }}",
+            "recommendation_reasoning": "={{ $json.output.recommendation_reasoning }}",
+            "data_gaps": "={{ $json.output.data_gaps }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Кандидат",
+              "displayName": "Кандидат",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Позиция",
+              "displayName": "Позиция",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Дата",
+              "displayName": "Дата",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "profile_summary",
+              "displayName": "profile_summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "experience_overview",
+              "displayName": "experience_overview",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "competencies",
+              "displayName": "competencies",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "role_fit",
+              "displayName": "role_fit",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "strengths",
+              "displayName": "strengths",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "weaknesses",
+              "displayName": "weaknesses",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "hard_skills_score",
+              "displayName": "hard_skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "hard_skills_comment",
+              "displayName": "hard_skills_comment",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "soft_skills_score",
+              "displayName": "soft_skills_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "soft_skills_comment",
+              "displayName": "soft_skills_comment",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "motivation_score",
+              "displayName": "motivation_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "motivation_comment",
+              "displayName": "motivation_comment",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "role_match_score",
+              "displayName": "role_match_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "role_match_comment",
+              "displayName": "role_match_comment",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "communication_score",
+              "displayName": "communication_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "communication_comment",
+              "displayName": "communication_comment",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "overall_score",
+              "displayName": "overall_score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "recommendation",
+              "displayName": "recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "recommendation_reasoning",
+              "displayName": "recommendation_reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "data_gaps",
+              "displayName": "data_gaps",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e6748f4a-ed13-4641-9a76-0dc98e438669",
+      "name": "Запись анализа в Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1520,
+        512
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5401d75e-9d5f-4c83-83ae-7de2db39f1e3",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Dead Letter Queue",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Дата ошибки": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+            "Нода": "={{ $json.execution.lastNodeExecuted }}",
+            "Сообщение об ошибке": "={{ $json.error.message }}",
+            "Workflow": "={{ $json.workflow.name }}",
+            "Execution ID": "={{ $json.execution.id }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "98f5c744-db2e-49b7-b5d9-61772a2ab418",
+      "name": "Запись ошибок в Dead Letter Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        320,
+        832
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On Form Submission - интервью": {
+      "main": [
+        [
+          {
+            "node": "Загрузка файла",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Deepgram - транскрибация",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Загрузка файла": {
+      "main": [
+        [
+          {
+            "node": "Создание ссылки на файл",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Создание ссылки на файл": {
+      "main": [
+        [
+          {
+            "node": "Merge - объединение веток",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deepgram - транскрибация": {
+      "main": [
+        [
+          {
+            "node": "Merge - объединение веток",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge - объединение веток": {
+      "main": [
+        [
+          {
+            "node": "Запись транскрипта в Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Запись транскрипта в Sheets": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - анализ интервью",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - анализ интервью": {
+      "main": [
+        [
+          {
+            "node": "Запись анализа в Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - анализ интервью",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (для авто-исправления)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Запись ошибок в Dead Letter Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "staticData": null
+}

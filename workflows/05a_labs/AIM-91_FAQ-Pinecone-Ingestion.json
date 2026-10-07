@@ -1,0 +1,189 @@
+{
+  "name": "FAQ → Pinecone (загрузка документа, AIM91)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Загрузка FAQ в векторную базу",
+        "formDescription": "Загрузите PDF с FAQ, укажите название и версию документа",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Файл FAQ",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Название документа",
+              "placeholder": "Напр. Полный FAQ HR",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Версия",
+              "placeholder": "Напр. 1.0",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "form-faq-trigger",
+      "name": "Загрузка FAQ (форма)",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -416,
+        320
+      ],
+      "notes": "Точка входа: PDF FAQ + название документа + версия."
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "faqtest",
+          "mode": "list",
+          "cachedResultName": "faqtest"
+        },
+        "options": {}
+      },
+      "id": "pinecone-faq-insert",
+      "name": "Pinecone FAQ (insert)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        320
+      ],
+      "credentials": {},
+      "notes": "Запись векторов FAQ в индекс faq (1536). Документы из Data Loader, эмбеддинги из Embeddings OpenAI."
+    },
+    {
+      "parameters": {
+        "options": {
+          "dimensions": 1536
+        }
+      },
+      "id": "embeddings-faq",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        528
+      ],
+      "credentials": {},
+      "notes": "Эмбеддинг-модель text-embedding-3-small (1536) — единая с Блоком 1."
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "loader": "pdfLoader",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "file_title",
+                "value": "={{ $json['Название документа'] }}"
+              },
+              {
+                "name": "version",
+                "value": "={{ $json['Версия'] }}"
+              },
+              {
+                "name": "update_date",
+                "value": "={{ $now.toISO() }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "dataloader-faq",
+      "name": "Default Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        528
+      ],
+      "notes": "Читает загруженный PDF (binary, pdfLoader, allInputData — не зависит от имени файлового поля). Метаданные: file_title, version, update_date."
+    },
+    {
+      "parameters": {
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "id": "splitter-faq",
+      "name": "Recursive Character Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        288,
+        704
+      ],
+      "notes": "Чанкинг FAQ: 1000 символов, overlap 200 (20%) — Q&A-блоки не рвутся на стыках."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Загрузка FAQ (форма)": {
+      "main": [
+        [
+          {
+            "node": "Pinecone FAQ (insert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone FAQ (insert)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone FAQ (insert)",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "staticData": null
+}

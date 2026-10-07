@@ -1,0 +1,1430 @@
+{
+  "name": "Блок 1  Приём и обработка резюме",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Анализ изображения",
+        "formDescription": "Оценка резюме",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Резюме",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf,.png,.jpg,.jpeg",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Ссылка",
+              "placeholder": "Ссылка на источник резюме",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Должность",
+              "placeholder": "Оставить пустым, если неизвестно"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5eee79c3-7db8-4385-8d4a-8749d0e8daf4",
+      "name": "Получение файла PDF или изображения",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -928,
+        192
+      ],
+      "notesInFlow": true,
+      "notes": "Точка входа. Веб-форма: принимает файл резюме (PDF/PNG/JPG), ссылку на источник и должность."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json['Резюме'].mimetype }}",
+                    "rightValue": "pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "b86b05e1-3e71-43c1-94ab-763589d976eb"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json['Резюме'].mimetype }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "c0b7f917-526f-4d3c-8426-9bc980fd86f4"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "2a508b36-126e-4d19-aee0-842aeef9fda8",
+      "name": "определение типа файла",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -624,
+        176
+      ],
+      "notesInFlow": true,
+      "notes": "Маршрутизация по mimetype: PDF → извлечение текста; image → OCR. Остальное → fallback."
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "______",
+        "options": {}
+      },
+      "id": "af1ef074-37fa-4aa7-b841-f3b1f57005aa",
+      "name": "Извлечение данных из PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        16
+      ],
+      "notesInFlow": true,
+      "notes": "Извлекает текстовый слой из PDF в поле text (без OCR)."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "AIM82"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ссылка": "={{ $('Получение файла PDF или изображения').item.json['Ссылка'] }}",
+            "Должность": "={{ $('Получение файла PDF или изображения').item.json['Должность'] }}",
+            "Текст": "={{ $json.text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ссылка",
+              "displayName": "Ссылка",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Должность",
+              "displayName": "Должность",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Текст",
+              "displayName": "Текст",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eb8223b9-45d5-4b06-95cf-e99855c9db3f",
+      "name": "Внесение текста резюме в файл AIM82 (PDF)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        176,
+        16
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "AIM82 (PDF-ветка): добавляет строку — Ссылка, Должность, сырой текст резюме ($json.text)."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Извлечение данных из PDF').item.json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — HR-аналитик. Анализируй ТОЛЬКО текст резюме, переданный во входе. Строго запрещено выдумывать навыки, компании, языки, оценки, зарплатные ожидания или любые факты, которых нет в тексте. Если данных по полю нет — верни строку \"не указано\". Числовые оценки (professional_skills, achievements, career_focus от 0 до 10 и overall_score от 0 до 10) выставляй только на основе фактов из текста. Верни ИСКЛЮЧИТЕЛЬНО валидный JSON по заданной схеме, без пояснений, markdown и лишнего текста."
+        }
+      },
+      "id": "713c3ed6-a855-482c-a183-df6457ae0877",
+      "name": "формирование JSON на основе текста резюме (PDF)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        384,
+        16
+      ],
+      "notesInFlow": true,
+      "notes": "HR-анализ текста (PDF): извлекает структуру кандидата в строгий JSON по схеме. Не выдумывает факты."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"candidate_name\": \"строка\",\n  \"email\": \"строка\",\n  \"phone\": \"строка\",\n  \"last_position\": \"строка\",\n  \"last_company\": \"строка\",\n  \"skills\": [\"строка\"],\n  \"education\": \"строка\",\n  \"languages\": [{\"language\": \"строка\", \"level\": \"строка\"}],\n  \"salary_expectation\": \"строка\",\n  \"scores\": {\"professional_skills\": 0, \"achievements\": 0, \"career_focus\": 0},\n  \"overall_score\": 0,\n  \"summary\": \"строка\"\n}"
+      },
+      "id": "0e948f7d-f904-4724-bdf6-ec4f1b2a3483",
+      "name": "Structured Output Parser (PDF)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        256
+      ],
+      "notesInFlow": true,
+      "notes": "Задаёт JSON-схему ответа анализа (валидация структуры)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "0c21832b-b227-4607-b1a4-832866af7f09",
+      "name": "Auto-fixing Parser (PDF)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        544,
+        160
+      ],
+      "notesInFlow": true,
+      "notes": "Оборачивает Structured Parser: при ошибке парсинга повторно исправляет ответ через LLM."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "AIM83"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Имя": "={{ $json.output.candidate_name }}",
+            "Email": "={{ $json.output.email }}",
+            "Телефон": "={{ $json.output.phone }}",
+            "Последняя должность": "={{ $json.output.last_position }}",
+            "Последняя компания": "={{ $json.output.last_company }}",
+            "Навыки": "={{ Array.isArray($json.output.skills) ? $json.output.skills.join(', ') : $json.output.skills }}",
+            "Образование": "={{ $json.output.education }}",
+            "Языки": "={{ Array.isArray($json.output.languages) ? $json.output.languages.map(l => l.language + ' (' + l.level + ')').join(', ') : $json.output.languages }}",
+            "Ожидания по зарплате": "={{ $json.output.salary_expectation }}",
+            "Профессиональные навыки": "={{ $json.output.scores.professional_skills }}",
+            "Достижения": "={{ $json.output.scores.achievements }}",
+            "Фокус на карьере": "={{ $json.output.scores.career_focus }}",
+            "Общая оценка": "={{ $json.output.overall_score }}",
+            "Заключение от ИИ": "={{ $json.output.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Имя",
+              "displayName": "Имя",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Телефон",
+              "displayName": "Телефон",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Последняя должность",
+              "displayName": "Последняя должность",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Последняя компания",
+              "displayName": "Последняя компания",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Навыки",
+              "displayName": "Навыки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Образование",
+              "displayName": "Образование",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Языки",
+              "displayName": "Языки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Ожидания по зарплате",
+              "displayName": "Ожидания по зарплате",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Профессиональные навыки",
+              "displayName": "Профессиональные навыки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Достижения",
+              "displayName": "Достижения",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Фокус на карьере",
+              "displayName": "Фокус на карьере",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Общая оценка",
+              "displayName": "Общая оценка",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Заключение от ИИ",
+              "displayName": "Заключение от ИИ",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "db7b98a5-b3c6-4aac-9f08-68929a4ad8af",
+      "name": "запись результатов в файл AIM83 (PDF)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        864,
+        -32
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "AIM83 (PDF-ветка): добавляет строку со всеми 14 полями анализа кандидата."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Распознай весь текст резюме на прикреплённом изображении и верни ТОЛЬКО сырой распознанный текст резюме — без markdown, комментариев и заголовков.",
+        "options": {
+          "systemMessage": "Ты — OCR-движок. Распознай и верни ТОЛЬКО сырой текст резюме с изображения, дословно. Не добавляй вступлений, комментариев, markdown или пояснений. Только текст резюме.",
+          "passthroughBinaryImages": true
+        }
+      },
+      "id": "55286b03-0a19-40ef-840a-10e907764b7e",
+      "name": "OCR: распознавание текста (Vision)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -144,
+        352
+      ],
+      "notesInFlow": true,
+      "notes": "OCR (vision): распознаёт текст резюме с изображения. passthroughBinaryImages: картинка идёт прямо в модель. Возвращает сырой текст."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "AIM82"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ссылка": "={{ $('Получение файла PDF или изображения').item.json['Ссылка'] }}",
+            "Должность": "={{ $('Получение файла PDF или изображения').item.json['Должность'] }}",
+            "Текст": "={{ $json.output }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ссылка",
+              "displayName": "Ссылка",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Должность",
+              "displayName": "Должность",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Текст",
+              "displayName": "Текст",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9d6c0123-0698-4b5a-9369-0500861c847f",
+      "name": "Внесение текста резюме в файл AIM82 (Image)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        192,
+        432
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "AIM82 (image-ветка): добавляет строку — Ссылка, Должность, распознанный текст ($json.output)."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('OCR: распознавание текста (Vision)').item.json.output }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — HR-аналитик. Анализируй ТОЛЬКО текст резюме, переданный во входе. Строго запрещено выдумывать навыки, компании, языки, оценки, зарплатные ожидания или любые факты, которых нет в тексте. Если данных по полю нет — верни строку \"не указано\". Числовые оценки (professional_skills, achievements, career_focus от 0 до 10 и overall_score от 0 до 10) выставляй только на основе фактов из текста. Верни ИСКЛЮЧИТЕЛЬНО валидный JSON по заданной схеме, без пояснений, markdown и лишнего текста."
+        }
+      },
+      "id": "3cdb68da-4ce0-4df1-8885-e5fa793d07d1",
+      "name": "формирование JSON на основе текста резюме (Image)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        384,
+        592
+      ],
+      "notesInFlow": true,
+      "notes": "HR-анализ распознанного текста (image): → структурный JSON по схеме. Не выдумывает факты."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"candidate_name\": \"строка\",\n  \"email\": \"строка\",\n  \"phone\": \"строка\",\n  \"last_position\": \"строка\",\n  \"last_company\": \"строка\",\n  \"skills\": [\"строка\"],\n  \"education\": \"строка\",\n  \"languages\": [{\"language\": \"строка\", \"level\": \"строка\"}],\n  \"salary_expectation\": \"строка\",\n  \"scores\": {\"professional_skills\": 0, \"achievements\": 0, \"career_focus\": 0},\n  \"overall_score\": 0,\n  \"summary\": \"строка\"\n}"
+      },
+      "id": "0d2b851a-e611-41c7-8d83-caf8ef28a464",
+      "name": "Structured Output Parser (Image)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        736,
+        928
+      ],
+      "notesInFlow": true,
+      "notes": "Задаёт JSON-схему ответа анализа (image-ветка)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "6e9c9ffa-08fb-4719-a767-2a22dc93259d",
+      "name": "Auto-fixing Parser (Image)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        576,
+        784
+      ],
+      "notesInFlow": true,
+      "notes": "Авто-исправление ответа парсера image-ветки через LLM."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "AIM83"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Имя": "={{ $json.output.candidate_name }}",
+            "Email": "={{ $json.output.email }}",
+            "Телефон": "={{ $json.output.phone }}",
+            "Последняя должность": "={{ $json.output.last_position }}",
+            "Последняя компания": "={{ $json.output.last_company }}",
+            "Навыки": "={{ Array.isArray($json.output.skills) ? $json.output.skills.join(', ') : $json.output.skills }}",
+            "Образование": "={{ $json.output.education }}",
+            "Языки": "={{ Array.isArray($json.output.languages) ? $json.output.languages.map(l => l.language + ' (' + l.level + ')').join(', ') : $json.output.languages }}",
+            "Ожидания по зарплате": "={{ $json.output.salary_expectation }}",
+            "Профессиональные навыки": "={{ $json.output.scores.professional_skills }}",
+            "Достижения": "={{ $json.output.scores.achievements }}",
+            "Фокус на карьере": "={{ $json.output.scores.career_focus }}",
+            "Общая оценка": "={{ $json.output.overall_score }}",
+            "Заключение от ИИ": "={{ $json.output.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Имя",
+              "displayName": "Имя",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Телефон",
+              "displayName": "Телефон",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Последняя должность",
+              "displayName": "Последняя должность",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Последняя компания",
+              "displayName": "Последняя компания",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Навыки",
+              "displayName": "Навыки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Образование",
+              "displayName": "Образование",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Языки",
+              "displayName": "Языки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Ожидания по зарплате",
+              "displayName": "Ожидания по зарплате",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Профессиональные навыки",
+              "displayName": "Профессиональные навыки",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Достижения",
+              "displayName": "Достижения",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Фокус на карьере",
+              "displayName": "Фокус на карьере",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Общая оценка",
+              "displayName": "Общая оценка",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Заключение от ИИ",
+              "displayName": "Заключение от ИИ",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5770918e-38cf-4086-b42c-caa22152014a",
+      "name": "запись результатов в файл AIM83 (Image)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        864,
+        384
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "AIM83 (image-ветка): добавляет строку со всеми 14 полями анализа кандидата."
+    },
+    {
+      "parameters": {
+        "content": "БЛОК 1 - Приём и обработка резюме\nForm Trigger - Switch - ветка PDF / ветка Image; не поддерживаемый формат - лист «Ошибки».\nПосле AI-анализа - ПАРАЛЛЕЛЬНАЯ запись в два хранилища: Google Sheets (AIM83 - 14 полей анализа) + Pinecone «hrtest» (чанки 1000/200; метаданные: имя, email, должность, навыки, дата).\nEmbedding-модель: text-embedding-3-small - ТА ЖЕ, что в Блоке 2 (поиск). Одна модель в обоих блоках  обязательно.\nVision/OCR: OpenRouter openai/gpt-4.1 (passthroughBinaryImages) · HR-анализ: openai/gpt-4.1-mini (OpenRouter).",
+        "height": 232,
+        "width": 440,
+        "color": 4
+      },
+      "id": "5991ae07-9310-4725-a913-5c7d79d59073",
+      "name": "note_main",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Ветка PDF\nExtract from File (текстовый слой) - AIM82 - AI-анализ (Structured + Auto-fixing) - AIM83.",
+        "height": 416,
+        "width": 1272,
+        "color": 5
+      },
+      "id": "0c4b0f13-3717-49b0-913f-ab6f48acaf3a",
+      "name": "note_pdf",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Ветка Image\nAI Agent (OpenRouter openai/gpt-4.1) распознаёт текст изображения - AIM82 - AI-анализ - AIM83.\nВключён passthroughBinaryImages: true - бинарь изображения передаётся прямо в модель, поэтому агент  «видит» картинку, а не имя файла.",
+        "height": 326,
+        "width": 328,
+        "color": 3
+      },
+      "id": "404b1247-caba-4c84-a573-63994b6391e7",
+      "name": "note_img",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "1c61ece7-681d-4e01-8163-aa486c5f41b6",
+      "name": "OpenRouter gpt-4.1-mini (PDF)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        336,
+        224
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "LLM HR-анализа PDF-ветки (openai/gpt-4.1-mini через OpenRouter)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "fadea077-c3ba-4076-b260-3773b1c60755",
+      "name": "OpenRouter для Auto-fixing (PDF)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        512,
+        256
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "LLM, который чинит невалидный JSON парсера (PDF-ветка)."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {}
+      },
+      "id": "1b600fed-ed92-4bd6-8e71-0f7a3ddf6df7",
+      "name": "OpenRouter gpt-4.1 (Vision)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        528
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "Vision-LLM для OCR изображения (openai/gpt-4.1 через OpenRouter)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "871b4b2f-d31e-42e4-9ed7-94e9ab891ac2",
+      "name": "OpenRouter gpt-4.1-mini (Image)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        336,
+        800
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "LLM HR-анализа image-ветки (openai/gpt-4.1-mini через OpenRouter)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a95be027-80e9-450d-9893-409d9f8bf97f",
+      "name": "OpenRouter для Auto-fixing (Image)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        560,
+        928
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "LLM, который чинит невалидный JSON (image-ветка)."
+    },
+    {
+      "parameters": {
+        "chatId": "=YOUR_CHAT_ID",
+        "text": "=Помилка: <code>{{ $json.execution.error.message }}</code> \nWorkflow: <a href=\"{{ $json.execution.url }}\">{{ $json.workflow.name }}</a> \nNode: {{ $json.execution.lastNodeExecuted }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -80,
+        -336
+      ],
+      "id": "69c29df8-96be-493e-946e-e07726288b58",
+      "name": "Telegram: уведомление об ошибке",
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        -336
+      ],
+      "id": "4494bf8f-acad-4702-a30c-9cf234511a1a",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "content": "Error Trigger\nСрабатывает при сбое выполнения воркфлоу.",
+        "height": 110,
+        "width": 220,
+        "color": 4
+      },
+      "id": "9d16e6eb-2d32-47c5-a3ae-04aac7280e16",
+      "name": "Note: Error Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Telegram: ошибка\nОтправляет в Telegram уведомление о технической ошибке воркфлоу (текст ошибки, нода, ссылка).",
+        "height": 126,
+        "width": 268,
+        "color": 2
+      },
+      "id": "bd8d488e-ab8e-4782-817c-9f6f44ed90e7",
+      "name": "Note: Telegram Error",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hrtest",
+          "mode": "list",
+          "cachedResultName": "hrtest"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1232,
+        320
+      ],
+      "id": "e5db48a3-086c-4895-9eff-d03ab50c277c",
+      "name": "Pinecone — вставка векторов (hrtest)",
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "Параллельная ветка хранения: insert векторов чанков резюме в индекс hrtest. Тот же индекс читает Блок 2 при поиске."
+    },
+    {
+      "parameters": {
+        "options": {
+          "dimensions": 1536
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1232,
+        528
+      ],
+      "id": "1db04dbc-188f-4388-b3fc-bc7744e1cc79",
+      "name": "Embeddings (text-embedding-3-small)",
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "Векторизация чанков. Дефолтная модель = text-embedding-3-small (1536) — та же, что в Блоке 2. Ключ OpenRouter в credential типа OpenAI."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit?gid=0#gid=0"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Ошибки"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Дата": "={{ $json.submittedAt }}",
+            "Имя файла": "={{ $json['Резюме'].filename }}",
+            "Формат": "={{ $json['Резюме'].mimetype }}",
+            "Причина": "Неподдерживаемый формат файла (поддерживаются PDF, PNG, JPG)"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Дата",
+              "displayName": "Дата",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Имя файла",
+              "displayName": "Имя файла",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Формат",
+              "displayName": "Формат",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "Причина",
+              "displayName": "Причина",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f7632396-fc83-48a2-88aa-36a83dd546c6",
+      "name": "Запись ошибки (неподдерж. формат)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -128,
+        736
+      ],
+      "credentials": {},
+      "notes": "Fallback Switch: неподдерживаемый формат → строка в лист «Ошибки» (дата, файл, формат, причина). Воркфлоу не падает."
+    },
+    {
+      "parameters": {
+        "content": "Неподдерживаемый формат\nfallback-выход Switch = запись в лист «Ошибки» (дата, имя файла, формат, причина). Воркфлоу не падает, пустые строки в AIM82/AIM83 не создаются.",
+        "height": 116,
+        "width": 300,
+        "color": 2
+      },
+      "id": "58f4b9c1-7eac-48c4-a979-7d0578edd1be",
+      "name": "note_err",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "id": "b2c0400a-f798-471b-a48e-2fb1e9d04520",
+      "name": "Разбивка на чанки (1000/200)",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        704
+      ],
+      "notesInFlow": true,
+      "notes": "Режет текст резюме на чанки ~1000 симв. с перекрытием 200, чтобы длинное резюме индексировалось по частям. Перекрытие не разрезает навыки на стыке чанков."
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.resume_text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "candidate_name",
+                "value": "={{ $json.output.candidate_name }}"
+              },
+              {
+                "name": "email",
+                "value": "={{ $json.output.email }}"
+              },
+              {
+                "name": "position",
+                "value": "={{ $json.output.last_position }}"
+              },
+              {
+                "name": "skills",
+                "value": "={{ Array.isArray($json.output.skills) ? $json.output.skills.join(', ') : $json.output.skills }}"
+              },
+              {
+                "name": "added_date",
+                "value": "={{ $now.toISO() }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "e3278a1c-809b-464d-ac1c-268d958b1921",
+      "name": "Документ + метаданные для Pinecone",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1376,
+        544
+      ],
+      "notesInFlow": true,
+      "notes": "pageContent = текст резюме; метаданные: имя, email, должность, навыки, дата. По ним фильтруется/группируется поиск в Блоке 2."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-pdf-1",
+              "name": "resume_text",
+              "value": "={{ $('Извлечение данных из PDF').item.json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a094507d-272c-4945-9b8b-64581eb2ca0e",
+      "name": "Подготовка к Pinecone (PDF)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        176
+      ],
+      "notesInFlow": true,
+      "notes": "Кладёт текст из PDF в поле resume_text для загрузчика Pinecone."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-img-1",
+              "name": "resume_text",
+              "value": "={{ $('OCR: распознавание текста (Vision)').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "2fcd746c-b13d-4fe7-ad35-d3d045e8c536",
+      "name": "Подготовка к Pinecone (Image)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        608
+      ],
+      "notesInFlow": true,
+      "notes": "Кладёт распознанный текст (OCR) в поле resume_text для загрузчика Pinecone."
+    },
+    {
+      "parameters": {
+        "content": "Параллельная запись (fan-out)\nПосле AI-анализа агент «формирование JSON…» отдаёт результат ОДНОВРЕМЕННО в две ветки:\n1. Google Sheets AIM83 — 14 полей анализа кандидата;\n2. Set - Документ+метаданные - Embeddings (text-embedding-3-small) -  Pinecone hrtest - векторное хранилище.\n\nОбе ветки исходят из ОДНОГО выхода ноды-агента это и есть параллельность Блока 1. Та же embedding-модель используется в Блоке 2 при поиске.",
+        "height": 262,
+        "width": 560,
+        "color": 6
+      },
+      "id": "64eb0d52-fe2b-47ec-9496-a4404b2bca36",
+      "name": "note_parallel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        832,
+        -304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Получение файла PDF или изображения": {
+      "main": [
+        [
+          {
+            "node": "определение типа файла",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "определение типа файла": {
+      "main": [
+        [
+          {
+            "node": "Извлечение данных из PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OCR: распознавание текста (Vision)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Запись ошибки (неподдерж. формат)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Извлечение данных из PDF": {
+      "main": [
+        [
+          {
+            "node": "Внесение текста резюме в файл AIM82 (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Внесение текста резюме в файл AIM82 (PDF)": {
+      "main": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "формирование JSON на основе текста резюме (PDF)": {
+      "main": [
+        [
+          {
+            "node": "запись результатов в файл AIM83 (PDF)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Подготовка к Pinecone (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR: распознавание текста (Vision)": {
+      "main": [
+        [
+          {
+            "node": "Внесение текста резюме в файл AIM82 (Image)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Внесение текста резюме в файл AIM82 (Image)": {
+      "main": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (Image)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "формирование JSON на основе текста резюме (Image)": {
+      "main": [
+        [
+          {
+            "node": "запись результатов в файл AIM83 (Image)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Подготовка к Pinecone (Image)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Parser (PDF)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (PDF)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Parser (Image)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (Image)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (PDF)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Parser (PDF)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Image)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Parser (Image)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter gpt-4.1-mini (PDF)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (PDF)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter для Auto-fixing (PDF)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Parser (PDF)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter gpt-4.1 (Vision)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "OCR: распознавание текста (Vision)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter gpt-4.1-mini (Image)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "формирование JSON на основе текста резюме (Image)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter для Auto-fixing (Image)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Parser (Image)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Telegram: уведомление об ошибке",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings (text-embedding-3-small)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone — вставка векторов (hrtest)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка к Pinecone (PDF)": {
+      "main": [
+        [
+          {
+            "node": "Pinecone — вставка векторов (hrtest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка к Pinecone (Image)": {
+      "main": [
+        [
+          {
+            "node": "Pinecone — вставка векторов (hrtest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбивка на чанки (1000/200)": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Документ + метаданные для Pinecone",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Документ + метаданные для Pinecone": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone — вставка векторов (hrtest)",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "staticData": null
+}

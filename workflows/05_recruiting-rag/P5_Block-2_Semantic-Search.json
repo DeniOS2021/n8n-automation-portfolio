@@ -1,0 +1,196 @@
+{
+  "name": "Блок 2  Семантический поиск кандидатов (hrtest)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "БЛОК 2 - Семантический поиск кандидатов\nРекрутер описывает кандидата на естественном языке в чате.\nЗапрос векторизуется той же моделью, что и в Блоке 1: text-embedding-3-small (критично: одна модель в обоих блоках, иначе векторные пространства несовместимы).\nПоиск: Pinecone, индекс hrtest (наполняется Блоком 1), до 10 результатов по убыванию релевантности.\nCode-нода группирует чанки по кандидатам (резюме разбито на чанки 1000/200 - без группировки один кандидат занял бы весь топ).\nОтвет формирует OpenRouter openai/gpt-4.1-mini: имя, score, должность, навыки + почему кандидат релевантен. Если подходящих нет  понятное сообщение.",
+        "height": 168,
+        "width": 1000,
+        "color": 4
+      },
+      "id": "sticky-block2-main",
+      "name": "Sticky Note: Блок 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "id": "chat-trigger-b2",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -400,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "Точка входа Блока 2: запрос рекрутера на естественном языке (например, «Python-разработчик с опытом REST API»)."
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "hrtest",
+          "cachedResultName": "hrtest"
+        },
+        "prompt": "={{ $json.chatInput }}",
+        "topK": 10,
+        "options": {}
+      },
+      "id": "pinecone-load-b2",
+      "name": "Поиск кандидатов в Pinecone (hrtest)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        -144,
+        96
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "Семантический поиск: запрос → вектор → топ-10 ближайших чанков резюме с метаданными и score."
+    },
+    {
+      "parameters": {
+        "options": {
+          "dimensions": 1536
+        }
+      },
+      "id": "embeddings-b2",
+      "name": "Embeddings: text-embedding-3-small",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        320
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "Та же embedding-модель, что в Блоке 1 (text-embedding-3-small, 1536). Ключ OpenRouter в credential типа OpenAI."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Порог релевантности: ниже — кандидат считается неподходящим (тюнится по живым тестам)\nconst MIN_SCORE = 0.2;\nconst query = $('Chat Trigger').first().json.chatInput;\n\nconst byName = {};\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  // Pinecone load: {document: {pageContent, metadata}, score} либо плоский вариант\n  const doc = j.document ?? j;\n  const meta = doc.metadata ?? j.metadata ?? {};\n  const score = typeof j.score === 'number' ? j.score : 0;\n  const name = meta.candidate_name;\n  if (!name) continue; // пустой/служебный item\n  const cur = byName[name];\n  if (!cur) {\n    byName[name] = {\n      name,\n      score,\n      // чанк без skills = устаревшая запись: его position не берём за истину\n      position: meta.skills ? (meta.position || '') : '',\n      skills: meta.skills || '',\n      email: meta.email || ''\n    };\n  } else {\n    // несколько чанков одного кандидата: max score, поля — из актуальных чанков (с polem skills)\n    cur.score = Math.max(cur.score, score);\n    if (meta.skills) {\n      cur.skills = cur.skills || meta.skills;\n      cur.position = cur.position || meta.position || '';\n    }\n    cur.email = cur.email || meta.email || '';\n  }\n}\n\nconst candidates = Object.values(byName)\n  .filter(c => c.score >= MIN_SCORE)\n  .sort((a, b) => b.score - a.score)\n  .slice(0, 10)\n  .map(c => ({\n    name: c.name,\n    score: Math.round(c.score * 1000) / 1000,\n    position: c.position || 'не указано',\n    skills: c.skills || 'не указано',\n    email: c.email || 'не указано'\n  }));\n\nreturn [{ json: { query, found: candidates.length > 0, candidates } }];"
+      },
+      "id": "code-group-b2",
+      "name": "Группировка чанков по кандидатам",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "Несколько чанков одного резюме → один кандидат (max score). Сортировка по убыванию, порог релевантности, до 10 кандидатов."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "Ты — ассистент рекрутера. На вход получаешь JSON результатов семантического поиска по базе резюме: {query, found, candidates: [{name, score, position, skills, email}]}. Кандидаты уже отсортированы по убыванию score.\n\nЕсли found=false или candidates пуст — верни дружелюбное сообщение: по запросу подходящих кандидатов в базе не нашлось; предложи переформулировать запрос или смягчить критерии. Не выдумывай кандидатов.\n\nЕсли found=true — сформируй нумерованный список кандидатов СТРОГО в исходном порядке (по убыванию score). Для каждого укажи: имя; релевантность score (числом, как в данных); должность; ключевые навыки; одну короткую фразу — почему кандидат релевантен запросу (сопоставь навыки/должность с текстом запроса). В конце добавь одну строку-итог: кого посмотреть в первую очередь.\n\nИспользуй ТОЛЬКО данные из входного JSON, ничего не добавляй и не выдумывай. Отвечай на русском, простым текстом с нумерованным списком, без markdown-таблиц."
+        }
+      },
+      "id": "agent-answer-b2",
+      "name": "Формирование ответа рекрутеру",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        400,
+        96
+      ],
+      "notesInFlow": true,
+      "notes": "Формирует ответ рекрутеру: список по убыванию релевантности (имя, score, навыки, объяснение) либо сообщение «не найдено»."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "openrouter-b2",
+      "name": "OpenRouter gpt-4.1-mini (ответ)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        368,
+        320
+      ],
+      "notesInFlow": true,
+      "credentials": {},
+      "notes": "LLM для формирования ответа (openai/gpt-4.1-mini через OpenRouter)."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Поиск кандидатов в Pinecone (hrtest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Поиск кандидатов в Pinecone (hrtest)": {
+      "main": [
+        [
+          {
+            "node": "Группировка чанков по кандидатам",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Группировка чанков по кандидатам": {
+      "main": [
+        [
+          {
+            "node": "Формирование ответа рекрутеру",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings: text-embedding-3-small": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Поиск кандидатов в Pinecone (hrtest)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter gpt-4.1-mini (ответ)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Формирование ответа рекрутеру",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "staticData": null
+}

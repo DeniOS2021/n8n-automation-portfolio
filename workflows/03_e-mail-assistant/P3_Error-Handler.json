@@ -1,0 +1,89 @@
+{
+  "name": "Error",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "=YOUR_CHAT_ID",
+        "text": "=Помилка: <code>{{ $json.execution.error.message }}</code> \nWorkflow: <a href=\"{{ $json.execution.url }}\">{{ $json.workflow.name }}</a> \nNode: {{ $json.execution.lastNodeExecuted }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        96
+      ],
+      "id": "e6aa7a23-457a-43d8-aca7-c8ed44d13ffc",
+      "name": "Send a text message2",
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        32,
+        96
+      ],
+      "id": "f1e9fcaa-a4d3-4e29-9c8a-96c76f8fdc2e",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "content": "### Error Trigger\nСрабатывает при сбое выполнения воркфлоу.",
+        "height": 110,
+        "width": 220,
+        "color": 4
+      },
+      "id": "a34bc9fe-1636-4021-9278-c268805776eb",
+      "name": "Note: Error Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Telegram: ошибка\nОтправляет в Telegram уведомление о технической ошибке воркфлоу (текст ошибки, нода, ссылка).",
+        "height": 126,
+        "width": 220,
+        "color": 2
+      },
+      "id": "33173e90-6231-4468-a218-ad4152109246",
+      "name": "Note: Telegram Error",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        288,
+        -32
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "staticData": null
+}

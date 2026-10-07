@@ -1,0 +1,1603 @@
+{
+  "name": "Project 8 — Structured AI Output System",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Структурированная обработка данных",
+        "formDescription": "Загрузите файл: скриншот бага, PDF-документ или аудиозапись.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Имя",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Тип материала",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Скриншот бага"
+                  },
+                  {
+                    "option": "PDF-документ"
+                  },
+                  {
+                    "option": "Аудиозапись"
+                  },
+                  {
+                    "option": "Другое"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Заголовок"
+            },
+            {
+              "fieldLabel": "Комментарий",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "Файл",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1502d317-cb3f-46f1-b0b6-24a573ea371c",
+      "name": "Форма: загрузка материала",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -688,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "submission_id",
+              "type": "string",
+              "value": "={{ $now.format('yyyyLLdd') + '-' + Math.random().toString(36).slice(2,10).toUpperCase() }}"
+            },
+            {
+              "id": "a2",
+              "name": "mime_type",
+              "type": "string",
+              "value": "={{ Object.values($binary)[0]?.mimeType || '' }}"
+            },
+            {
+              "id": "a3",
+              "name": "binary_key",
+              "type": "string",
+              "value": "={{ Object.keys($binary)[0] || 'Файл' }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {
+          "stripBinary": false
+        }
+      },
+      "id": "b4d33444-3f5c-452f-82fd-038488d59111",
+      "name": "Set: submission_id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -464,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ Object.values($binary)[0]?.mimeType || '' }}",
+                    "rightValue": "image/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "IMAGE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c2",
+                    "leftValue": "={{ Object.values($binary)[0]?.mimeType || '' }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c3",
+                    "leftValue": "={{ Object.values($binary)[0]?.mimeType || '' }}",
+                    "rightValue": "audio/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AUDIO"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "e2fb8bcd-1fc7-46fc-be0f-0beffdf370fb",
+      "name": "Switch: тип файла",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -224,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Контекст от пользователя — Заголовок: {{ $json['Заголовок'] || 'не указан' }}; Комментарий: {{ $json['Комментарий'] || 'нет' }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "type": "HumanMessagePromptTemplate",
+              "message": "# РОЛЬ И КОНТЕКСТ\nТы — старший QA-аналитик. Ты анализируешь скриншот баг-репорта и заносишь его в трекер.\nТвоя классификация severity напрямую влияет на приоритет команды.\nНа изображении — скриншот пользовательского интерфейса, приложенный к баг-репорту.\n\n# КРИТЕРИИ РАССУЖДЕНИЯ (оси SGR)\nПроанализируй изображение по осям и СНАЧАЛА запиши рассуждение:\n1. Затронутый компонент: какой экран/раздел/элемент показан.\n2. Видимая проблема: что именно не так (ошибка, некорректное состояние).\n3. Видимый текст ошибки: точный текст, если читается (иначе null).\n4. severity-сигналы: блокирует ли работу, есть ли обходной путь, насколько важна функция.\n5. Рекомендация: что сделать следующим шагом.\n\n# ШКАЛА SEVERITY\ncritical — продукт неработоспособен / потеря данных / нет обходного пути.\nhigh — ключевая функция сломана для значимой группы пользователей.\nmedium — функция работает с ограничениями, есть обходной путь.\nlow — косметическая проблема или крайне редкий случай.\n\n# ПРАВИЛА\nОтвечай строго на русском языке. Не придумывай данные, которых нет на изображении.\nЕсли поле нечитаемо или данных нет — ставь null, не заполняй произвольным текстом.\nСначала запиши рассуждение в тегах <reasoning>...</reasoning>, затем верни ТОЛЬКО JSON по схеме."
+            },
+            {
+              "type": "HumanMessagePromptTemplate",
+              "messageType": "imageBinary",
+              "binaryImageDataKey": "={{ $json.binary_key }}"
+            }
+          ]
+        }
+      },
+      "id": "70106707-5a2c-41d0-a594-02f8d0ce09f1",
+      "name": "Vision: анализ баг-репорта",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        48,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "09cf53a0-d2ed-40cd-b963-f6000cb3fafc",
+      "name": "OpenRouter: Vision-модель",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        48,
+        464
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"affected_component\": {\n      \"type\": \"string\"\n    },\n    \"problem_description\": {\n      \"type\": \"string\"\n    },\n    \"error_text_visible\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"critical\",\n        \"high\",\n        \"medium\",\n        \"low\"\n      ]\n    },\n    \"reasoning_summary\": {\n      \"type\": \"string\"\n    },\n    \"recommended_action\": {\n      \"type\": \"string\"\n    },\n    \"confidence\": {\n      \"type\": \"number\"\n    },\n    \"needs_human_review\": {\n      \"type\": \"boolean\"\n    },\n    \"unclear_areas\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    }\n  },\n  \"required\": [\n    \"affected_component\",\n    \"problem_description\",\n    \"severity\",\n    \"reasoning_summary\",\n    \"recommended_action\",\n    \"confidence\",\n    \"needs_human_review\"\n  ]\n}"
+      },
+      "id": "216eacbb-9710-4147-acc3-93037911b9e0",
+      "name": "Схема: баг-репорт",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "69ec3d69-a630-4db4-a54f-a74b21842979",
+      "name": "OpenRouter: модель автоисправления",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        48,
+        640
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a3a49843-0812-40d4-9e58-cbcb81502013",
+      "name": "Автоисправление формата",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        224,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "={{ $json.binary_key }}",
+        "name": "={{ $json.submission_id }}-{{ $binary[$json.binary_key]?.fileName || 'screenshot' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DRIVE_ID"
+        },
+        "options": {}
+      },
+      "id": "aa7192c8-56b7-4a54-ab52-12e4527beecc",
+      "name": "Drive: сохранить скриншот",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        48,
+        32
+      ],
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Bug Reports"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "6cbc685c-3443-4122-8d6a-2837b341eb8e",
+      "name": "Sheets: запись в Bug Reports",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        512,
+        224
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "={{ $('Set: submission_id').item.json.binary_key }}",
+        "options": {}
+      },
+      "id": "eb258b73-f6fc-43df-9f63-3dc71f4e2d21",
+      "name": "Extract: текст из PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        48,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&language=ru",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token ВСТАВЬТЕ_DEEPGRAM_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $('Set: submission_id').item.json.mime_type }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "={{ $('Set: submission_id').item.json.binary_key }}",
+        "options": {}
+      },
+      "id": "7c703121-d685-4511-b82e-f4ae3e1fc71b",
+      "name": "HTTP: транскрибация Deepgram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        48,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t1",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.results.channels[0].alternatives[0].transcript }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6995d66a-e50e-4e3f-abac-c0b5648858e6",
+      "name": "Set: текст из транскрипции",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        272,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $('Set: submission_id').item.json.submission_id }}"
+            },
+            {
+              "id": "d2",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Форма: загрузка материала').item.json['Заголовок'] || 'Без названия' }}"
+            },
+            {
+              "id": "d3",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1d8adb3b-d385-43b6-91c3-d1da1f209509",
+      "name": "Set: общий текст документа",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "={{ $json.binary_key }}",
+        "name": "={{ $json.submission_id }}-{{ $binary[$json.binary_key]?.fileName || 'source' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_DRIVE_ID"
+        },
+        "options": {}
+      },
+      "id": "8e169255-9c55-4d32-8205-78629e06005a",
+      "name": "Drive: сохранить исходник",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        464,
+        400
+      ],
+      "credentials": {},
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Source Documents"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "1b3b7631-efcf-41a7-9c5d-dbc40bdb75fa",
+      "name": "Sheets: запись в Source Documents",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        944,
+        720
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "l1",
+              "leftValue": "={{ ($('Set: общий текст документа').item.json.text || '').length }}",
+              "rightValue": 10000,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5e4e6f72-7180-4bd6-871e-239225a503d8",
+      "name": "IF: длина текста > 10000",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.doc_id }}"
+            },
+            {
+              "id": "p2",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.doc_title }}"
+            },
+            {
+              "id": "p3",
+              "name": "source_text",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.text }}"
+            },
+            {
+              "id": "p4",
+              "name": "chunks",
+              "type": "array",
+              "value": "={{ ($('Set: общий текст документа').item.json.text || '').match(/[\\s\\S]{1,6000}/g) || [] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "892e7f5d-f283-4952-927f-0ec5007a6db3",
+      "name": "Set: подготовка чанков",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1408,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "chunks",
+        "options": {},
+        "destinationFieldName": "chunk_text",
+        "include": "noOtherFields"
+      },
+      "id": "61a99118-089b-41ed-8b69-ce6ddce1b5b1",
+      "name": "Split Out: один чанк = элемент",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $('Set: подготовка чанков').item.json.doc_id }}"
+            },
+            {
+              "id": "m2",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Set: подготовка чанков').item.json.doc_title }}"
+            },
+            {
+              "id": "m3",
+              "name": "chunk_index",
+              "type": "number",
+              "value": "={{ $itemIndex + 1 }}"
+            },
+            {
+              "id": "m4",
+              "name": "chunks_count",
+              "type": "number",
+              "value": "={{ $('Set: подготовка чанков').item.json.chunks.length }}"
+            },
+            {
+              "id": "m5",
+              "name": "chunk_text",
+              "type": "string",
+              "value": "={{ $json.chunk_text || $json.chunks }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b00ed9e7-8f83-46e1-b621-520d56f178da",
+      "name": "Set: метаданные чанка",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Кратко суммаризируй ОДИН фрагмент документа (не делай выводов по всему документу). Сохрани ключевые факты. Отвечай на русском.\n\nФрагмент:\n{{ $json.chunk_text }}"
+      },
+      "id": "dbfca61a-b8bf-4612-a4ed-1cf84fab1778",
+      "name": "MAP: резюме чанка",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        2064,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "ebdc4c1a-7d89-4838-b927-073e33fdb096",
+      "name": "OpenRouter: MAP-модель (mini)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        768
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "text",
+              "renameField": true,
+              "outputFieldName": "partial_summaries"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6948ac93-2e20-41d6-8688-7c32937e9d0f",
+      "name": "Aggregate: сбор частичных резюме",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2288,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $('Set: подготовка чанков').item.json.doc_id }}"
+            },
+            {
+              "id": "r2",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Set: подготовка чанков').item.json.doc_title }}"
+            },
+            {
+              "id": "r3",
+              "name": "chunks_count",
+              "type": "number",
+              "value": "={{ $('Set: подготовка чанков').item.json.chunks.length }}"
+            },
+            {
+              "id": "r4",
+              "name": "partial_summaries_text",
+              "type": "string",
+              "value": "={{ ($json.partial_summaries || []).map((s,i) => 'Чанк ' + (i+1) + ':\\n' + s).join('\\n\\n---\\n\\n') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "42a5045c-cc92-4ef3-a16f-3e4e8d37c932",
+      "name": "Set: подготовка ввода REDUCE",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2512,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Собери единое итоговое резюме всего документа из частичных резюме ниже. Удали повторы, объедини связанные идеи, ничего не придумывай от себя. Отвечай на русском.\n\nДокумент: {{ $json.doc_title }} (ID {{ $json.doc_id }}), частей: {{ $json.chunks_count }}.\n\nЧастичные резюме:\n{{ $json.partial_summaries_text }}"
+      },
+      "id": "6e0d9e23-6913-4c08-a948-49158d2ae479",
+      "name": "REDUCE: финальное резюме",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        2720,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "94dee651-bb8a-4132-bc43-820b9e7f1375",
+      "name": "OpenRouter: REDUCE-модель",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2720,
+        768
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Кратко суммаризируй документ ниже: ключевые мысли, решения, важные детали. Ничего не придумывай. Отвечай на русском.\n\nДокумент: {{ $('Set: общий текст документа').item.json.doc_title }}\n\nТекст:\n{{ $('Set: общий текст документа').item.json.text }}"
+      },
+      "id": "f695a696-ee45-46a5-a69e-bb986b7647cc",
+      "name": "Прямое резюме",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        1408,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "a3dca532-db25-49c1-bfdd-620c4c69edac",
+      "name": "OpenRouter: модель резюме",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        1168
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.doc_id }}"
+            },
+            {
+              "id": "f2",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.doc_title }}"
+            },
+            {
+              "id": "f3",
+              "name": "final_summary",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "id": "f4",
+              "name": "chunks_count",
+              "type": "number",
+              "value": "={{ (($('Set: общий текст документа').item.json.text || '').length > 10000) ? Math.ceil(($('Set: общий текст документа').item.json.text || '').length / 6000) : 1 }}"
+            },
+            {
+              "id": "f5",
+              "name": "created_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "id": "f6",
+              "name": "model_map",
+              "type": "string",
+              "value": "openai/gpt-4o-mini"
+            },
+            {
+              "id": "f7",
+              "name": "model_reduce",
+              "type": "string",
+              "value": "openai/gpt-4o"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "76625dd5-6922-4dd1-99fe-cc6a11875b14",
+      "name": "Set: финальные поля",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2960,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SHEET_GID",
+          "cachedResultName": "Summaries"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9f36b0f4-0ea0-48fb-9bc4-eb0e129f73c8",
+      "name": "Sheets: запись в Summaries",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3184,
+        720
+      ],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "status",
+              "type": "string",
+              "value": "unsupported_format"
+            },
+            {
+              "id": "e2",
+              "name": "message",
+              "type": "string",
+              "value": "=Формат файла не поддерживается ({{ $('Set: submission_id').item.json.mime_type }}). Поддерживаются: изображения, PDF и аудио."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "836b80ce-58fc-4038-9d8f-ee820d6c5f36",
+      "name": "Set: формат не поддерживается",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        48,
+        1120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4bdf0d2b-4195-4a29-a1e5-9bd00817513f",
+      "name": "Error Trigger: перехватчик",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5bd2505e-97a2-4f4a-98b2-0e07e46a344f",
+      "name": "NoOp: лог ошибки",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "ТОЧКА ВХОДА\nОдна форма принимает любой файл. Set присваивает submission_id (YYYYMMDD-XXXXXXXX) и определяет MIME-тип. Switch направляет в нужную ветку.",
+        "height": 200,
+        "width": 720,
+        "color": 4
+      },
+      "id": "647baa19-0e42-4704-bd42-93fe351d52ea",
+      "name": "Заметка 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "ВЕТКА 1 — Vision-анализ скриншота бага (SGR)\nSwitch (IMAGE) запускает параллельно: (а) Drive — сохранить скриншот, (б) Vision-модель (SGR-рассуждение по осям) -> Автоисправление формата + строгая схема -> лист Bug Reports (ссылка на Drive подтягивается выражением).\n\nИзображение подаётся в Vision как Binary: в User Message добавлено вложение Image (Binary), поле = binary_key из формы («Файл»). Drive стоит ВЫШЕ Vision на канвасе — при execution order v1 верхняя ветка выполняется первой.",
+        "height": 200,
+        "width": 760,
+        "color": 5
+      },
+      "id": "d97bbd95-8910-4b6f-b42e-628410fbee91",
+      "name": "Заметка 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -192
+      ]
+    },
+    {
+      "parameters": {
+        "content": "ВЕТКА 2 — документы и аудио\nSwitch (PDF/AUDIO) параллельно: (а) Drive — сохранить исходник, (б) обработка: PDF -> Extract from File; Аудио -> Deepgram (HTTP) -> транскрипция. Оба -> общий текст -> лист Source Documents (ссылка на Drive — выражением).\n\nПочему Drive параллельно: HTTP Request и LLM-узлы не передают binary дальше, поэтому загрузка исходника идёт напрямую от Switch, где файл ещё есть.",
+        "height": 150,
+        "width": 700,
+        "color": 6
+      },
+      "id": "172d8311-020e-4be1-b78b-11b4b25ac20c",
+      "name": "Заметка 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "content": "MAP-REDUCE (длинные тексты)\nIF длина > 10000: режем на чанки по 6000 -> Split Out -> метаданные -> MAP (gpt-4o-mini по каждому чанку) -> Aggregate -> REDUCE (gpt-4o) -> финальные поля.\nИначе: прямое резюме (gpt-4o). Итог -> лист Summaries.",
+        "height": 190,
+        "width": 760,
+        "color": 3
+      },
+      "id": "418c9104-f5bb-4ee4-a363-f1d5c670680b",
+      "name": "Заметка 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "ОБРАБОТКА ОШИБОК\nDEFAULT-ветка Switch -> сообщение «формат не поддерживается» (без падения). Error Trigger -> глобальный перехватчик любых сбоев.",
+        "height": 150,
+        "width": 720,
+        "color": 2
+      },
+      "id": "2c83f8e4-36a0-4071-8b76-7eebc9d3ca0a",
+      "name": "Заметка 5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c0",
+              "name": "report_link",
+              "type": "string",
+              "value": "={{ $('Drive: сохранить скриншот').isExecuted ? $('Drive: сохранить скриншот').first().json.webViewLink : '' }}"
+            },
+            {
+              "id": "c1",
+              "name": "submission_id",
+              "type": "string",
+              "value": "={{ $('Set: submission_id').item.json.submission_id }}"
+            },
+            {
+              "id": "c2",
+              "name": "affected_component",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.affected_component }}"
+            },
+            {
+              "id": "c3",
+              "name": "problem_description",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.problem_description }}"
+            },
+            {
+              "id": "c4",
+              "name": "error_text_visible",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.error_text_visible }}"
+            },
+            {
+              "id": "c5",
+              "name": "severity",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.severity }}"
+            },
+            {
+              "id": "c6",
+              "name": "reasoning_summary",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.reasoning_summary }}"
+            },
+            {
+              "id": "c7",
+              "name": "recommended_action",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.recommended_action }}"
+            },
+            {
+              "id": "c8",
+              "name": "confidence",
+              "type": "number",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.confidence }}"
+            },
+            {
+              "id": "c9",
+              "name": "needs_human_review",
+              "type": "boolean",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.needs_human_review }}"
+            },
+            {
+              "id": "c10",
+              "name": "unclear_areas",
+              "type": "string",
+              "value": "={{ $('Vision: анализ баг-репорта').item.json.output.unclear_areas }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "row_eda1ba",
+      "name": "Строка: Bug Reports",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c0",
+              "name": "submission_id",
+              "type": "string",
+              "value": "={{ $('Set: submission_id').item.json.submission_id }}"
+            },
+            {
+              "id": "c1",
+              "name": "doc_title",
+              "type": "string",
+              "value": "={{ $('Set: общий текст документа').item.json.doc_title }}"
+            },
+            {
+              "id": "c2",
+              "name": "material_type",
+              "type": "string",
+              "value": "={{ $('Форма: загрузка материала').item.json['Тип материала'] }}"
+            },
+            {
+              "id": "c3",
+              "name": "drive_link",
+              "type": "string",
+              "value": "={{ $('Drive: сохранить исходник').isExecuted ? $('Drive: сохранить исходник').first().json.webViewLink : '' }}"
+            },
+            {
+              "id": "c4",
+              "name": "text_length",
+              "type": "number",
+              "value": "={{ ($('Set: общий текст документа').item.json.text || '').length }}"
+            },
+            {
+              "id": "c5",
+              "name": "created_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "row_18a10d",
+      "name": "Строка: Source Documents",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -460,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c0",
+              "name": "doc_id",
+              "type": "string",
+              "value": "={{ $json.doc_id }}"
+            },
+            {
+              "id": "c1",
+              "name": "title",
+              "type": "string",
+              "value": "={{ $json.doc_title }}"
+            },
+            {
+              "id": "c2",
+              "name": "final_summary",
+              "type": "string",
+              "value": "={{ $json.final_summary }}"
+            },
+            {
+              "id": "c3",
+              "name": "chunks",
+              "type": "number",
+              "value": "={{ $json.chunks_count }}"
+            },
+            {
+              "id": "c4",
+              "name": "created_at",
+              "type": "string",
+              "value": "={{ $json.created_at }}"
+            },
+            {
+              "id": "c5",
+              "name": "model_map",
+              "type": "string",
+              "value": "={{ $json.model_map }}"
+            },
+            {
+              "id": "c6",
+              "name": "model_reduce",
+              "type": "string",
+              "value": "={{ $json.model_reduce }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "row_4d1601",
+      "name": "Строка: Summaries",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1900,
+        760
+      ]
+    }
+  ],
+  "connections": {
+    "Форма: загрузка материала": {
+      "main": [
+        [
+          {
+            "node": "Set: submission_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: submission_id": {
+      "main": [
+        [
+          {
+            "node": "Switch: тип файла",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: тип файла": {
+      "main": [
+        [
+          {
+            "node": "Drive: сохранить скриншот",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vision: анализ баг-репорта",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Drive: сохранить исходник",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract: текст из PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Drive: сохранить исходник",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP: транскрибация Deepgram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: формат не поддерживается",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: Vision-модель": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Vision: анализ баг-репорта",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Схема: баг-репорт": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Автоисправление формата",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: модель автоисправления": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Автоисправление формата",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Автоисправление формата": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Vision: анализ баг-репорта",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision: анализ баг-репорта": {
+      "main": [
+        [
+          {
+            "node": "Строка: Bug Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: транскрибация Deepgram": {
+      "main": [
+        [
+          {
+            "node": "Set: текст из транскрипции",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract: текст из PDF": {
+      "main": [
+        [
+          {
+            "node": "Set: общий текст документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: текст из транскрипции": {
+      "main": [
+        [
+          {
+            "node": "Set: общий текст документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: общий текст документа": {
+      "main": [
+        [
+          {
+            "node": "Строка: Source Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets: запись в Source Documents": {
+      "main": [
+        [
+          {
+            "node": "IF: длина текста > 10000",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: длина текста > 10000": {
+      "main": [
+        [
+          {
+            "node": "Set: подготовка чанков",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Прямое резюме",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: подготовка чанков": {
+      "main": [
+        [
+          {
+            "node": "Split Out: один чанк = элемент",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out: один чанк = элемент": {
+      "main": [
+        [
+          {
+            "node": "Set: метаданные чанка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: метаданные чанка": {
+      "main": [
+        [
+          {
+            "node": "MAP: резюме чанка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: MAP-модель (mini)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "MAP: резюме чанка",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAP: резюме чанка": {
+      "main": [
+        [
+          {
+            "node": "Aggregate: сбор частичных резюме",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate: сбор частичных резюме": {
+      "main": [
+        [
+          {
+            "node": "Set: подготовка ввода REDUCE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: подготовка ввода REDUCE": {
+      "main": [
+        [
+          {
+            "node": "REDUCE: финальное резюме",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: REDUCE-модель": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "REDUCE: финальное резюме",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: модель резюме": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Прямое резюме",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "REDUCE: финальное резюме": {
+      "main": [
+        [
+          {
+            "node": "Set: финальные поля",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Прямое резюме": {
+      "main": [
+        [
+          {
+            "node": "Set: финальные поля",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: финальные поля": {
+      "main": [
+        [
+          {
+            "node": "Строка: Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger: перехватчик": {
+      "main": [
+        [
+          {
+            "node": "NoOp: лог ошибки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Строка: Bug Reports": {
+      "main": [
+        [
+          {
+            "node": "Sheets: запись в Bug Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Строка: Source Documents": {
+      "main": [
+        [
+          {
+            "node": "Sheets: запись в Source Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Строка: Summaries": {
+      "main": [
+        [
+          {
+            "node": "Sheets: запись в Summaries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateId": "ich-project-8"
+  },
+  "staticData": null,
+  "active": false
+}
